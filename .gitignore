@@ -1,0 +1,16 @@
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+
+# Folder config files
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows System files
+System Volume Information/
+pagefile.sys
+swapfile.sys
+hiberfil.sys
