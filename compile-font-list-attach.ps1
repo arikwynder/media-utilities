@@ -1,0 +1,1 @@
+$content = "" ; foreach ($i in Get-ChildItem -Recurse -File ) { $j = [System.IO.Path]::GetFileNameWithoutExtension($i) ; $k = $i.DirectoryName ; $l = [System.IO.Path]::GetExtension($i) ; $content = -join($content," ","--attach-file '$k\$j$l'"," ") } ; New-Item -ItemType File -Name "font-list.txt" -Value $content ;
