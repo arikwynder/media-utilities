@@ -17,6 +17,7 @@ param(
 	[switch]$extractSubs,
 	[switch]$passthroughAudioExt,
 	[switch]$passthroughSubsExt,
+	[switch]$mobileMode,
 	[switch]$forcePath,
 	[switch]$h,
 	[switch]$help
@@ -357,9 +358,18 @@ function compile-HDR-video {
 	}
 
 
-	$baseFrameRate = [double][Math]::Log10(24) ;
+	$baseFrameRate = 24 ;
 	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $HDRvid).Split("/") ;
-	$frameRateComp = [Math]::Log10([double]($frameRateComp[0]) / [double]($frameRateComp[1])) ;
+	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
+
+	if ($frameRateComp -gt ($baseFrameRate*2)) {
+		$frameRateComp = $frameRateComp - $baseFrameRate;
+	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3)) {
+		$frameRateComp = $frameRateComp - $baseFrameRate/4;
+	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1)) {
+		$frameRateComp = $frameRateComp - $baseFrameRate/8;
+	}
+
 	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
 	$bitrateStr = -join(([Math]::Ceiling(($bitrate) * [double]($bitRateScale))).toString(),"M") ;
 	$maxrateStr = -join(([Math]::Ceiling(($maxrate) * [double]($bitRateScale))).toString(),"M") ;
@@ -469,7 +479,16 @@ function compile-SDR-video {
 
 	$baseFrameRate = [double][Math]::Log10(24) ;
 	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $SDRvid).Split("/") ;
-	$frameRateComp = [Math]::Log10([double]($frameRateComp[0]) / [double]($frameRateComp[1])) ;
+	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
+
+	if ($frameRateComp -gt ($baseFrameRate*2)) {
+		$frameRateComp = $frameRateComp - $baseFrameRate;
+	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3)) {
+		$frameRateComp = $frameRateComp - $baseFrameRate/4;
+	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1)) {
+		$frameRateComp = $frameRateComp - $baseFrameRate/8;
+	}
+
 	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
 	$bitrateStr = -join(([Math]::Ceiling(($bitrate) * [double]($bitRateScale))).toString(),"M") ;
 	$maxrateStr = -join(([Math]::Ceiling(($maxrate) * [double]($bitRateScale))).toString(),"M") ;
