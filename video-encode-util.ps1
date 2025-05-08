@@ -376,10 +376,10 @@ function compile-HDR-video {
 
 	if ($frameRateComp -gt ($baseFrameRate*2)) {
 		$frameRateComp = $frameRateComp - $baseFrameRate;
-	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
+	} elseif (($frameRateComp -le ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
+		$frameRateComp = $frameRateComp - $baseFrameRate/2;
+	} elseif (($frameRateComp -le ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
 		$frameRateComp = $frameRateComp - $baseFrameRate/4;
-	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
-		$frameRateComp = $frameRateComp - $baseFrameRate/8;
 	}
 
 	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
@@ -507,10 +507,10 @@ function compile-SDR-video {
 
 	if ($frameRateComp -gt ($baseFrameRate*2)) {
 		$frameRateComp = $frameRateComp - $baseFrameRate;
-	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
+	} elseif (($frameRateComp -le ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
+		$frameRateComp = $frameRateComp - $baseFrameRate/2;
+	} elseif (($frameRateComp -le ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
 		$frameRateComp = $frameRateComp - $baseFrameRate/4;
-	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
-		$frameRateComp = $frameRateComp - $baseFrameRate/8;
 	}
 
 	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
