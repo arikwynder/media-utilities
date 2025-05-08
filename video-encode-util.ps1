@@ -9,9 +9,10 @@ param(
 	$seek,
 	$seekTo,
 	$output,
-	[String]$aspectRatio='16/9',
+	[String]$aspectRatio='16:9',
 	[switch]$antialias,
 	[switch]$favorCommercialDimensions,
+	[switch]$noPadding,
 	[switch]$forceSDR,
 	[switch]$extractAudio,
 	[switch]$extractSubs,
@@ -277,7 +278,8 @@ function compile-HDR-video {
 		$vidWidth,
 		$vidHeight,
 		$tune,
-		$preset
+		$preset,
+		$aspectRatio
 	)
 
 	if ($output -ne $Null) {
@@ -293,9 +295,13 @@ function compile-HDR-video {
 	}
 
 
+	$aspectRatioTop = [int]$aspectRatio.split(":")[0]; #width
+	$aspectRatioBot = [int]$aspectRatio.split(":")[1]; #height
+	$vidAspectRatioTop = [int]$vidAspectRatio.split(":")[0]; #width
+	$vidAspectRatioBot = [int]$vidAspectRatio.split(":")[1]; #height
 
-	$aspectRatioTop = [int]$aspectRatio.split("/")[0]; #width
-	$aspectRatioBot = [int]$aspectRatio.split("/")[1]; #height
+	echo $aspectRatio, $aspectRatioTop, $aspectRatioBot;
+
 
 	$bufWidth = $vidWidth ;
 	$bufHeight = $vidHeight ;
@@ -304,32 +310,39 @@ function compile-HDR-video {
 
 	 # example being if we have a 1440x1080p video and want 16:9 AR, width = 1080 * 16/9
 	 # alternatively, we have 1920x800p video and want 16:9 AR, height = 1920 * 9/16
-	if ($aspectRatioBot -gt $aspectRatioTop) {
+	if ($vidAspectRatioBot -gt $vidAspectRatioTop) {
 		Write-Host "`tAspect Ratio is Portrait" ;
 		if ($favorCommercialDimensions) {
-			if ($vidHeight -lt 1080) {
+			if ($vidHeight -le 1080) {
 				$scaleHeight = 1080
 				$bufHeight = 1080
-			} elseif ($vidHeight -gt 1920 -AND $vidHeight -lt 2160) {
+			} else {
 				$scaleHeight = 2160
 				$bufHeight = 2160
 			}
 		}
-		$bufWidth = [int]$scaleHeight*(${aspectRatioTop}/${aspectRatioBot}) ;
+		$bufWidth = [Math]::Ceiling([int]$bufHeight*(${aspectRatioTop}/${aspectRatioBot})) ;
 		$scaleWidth = -2 ;
 	} else {
 		Write-Host "`tAspect Ratio is Landscape or Square" ;
 		if ($favorCommercialDimensions) {
-			if ($vidWidth -lt 1920) {
+			if ($vidWidth -le 1920) {
 				$scaleWidth = 1920
 				$bufWidth = 1920
-			} elseif ($vidWidth -gt 1920 -AND $vidWidth -lt 3840) {
+			} else {
 				$scaleWidth = 3840
 				$bufWidth = 3840
 			}
 		}
-		$bufHeight = [int]$scaleWidth*(${aspectRatioBot}/${aspectRatioTop}) ;
+		$bufHeight = [Math]::Ceiling([int]$bufWidth*(${aspectRatioBot}/${aspectRatioTop})) ;
 		$scaleHeight = -2 ;
+	}
+
+	if (($bufWidth % 2) -ne 0) {
+		$bufWidth++;
+	}
+	if (($bufHeight % 2) -ne 0) {
+		$bufHeight++;
 	}
 
 	$filter = "scale=${scaleWidth}:${scaleheight}:force_original_aspect_ratio=decrease,pad=${bufWidth}:${bufHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1"
@@ -337,36 +350,35 @@ function compile-HDR-video {
 		$filter = -join("hqx=4,",$filter) #,",smartblur=lt=2")
 	}
 
-	$vidWidthBase = 1280 ;
-	$vidHeightBase = 720 ;
+	$vidLongBase = 1280 ;
 	$bitRate = 25 ;
 	$maxRate = 28 ;
 	$bufSize = 14 ;
 
 
 
-	if ($vidWidth -ge $vidHeight) {
+	if ($scaleWidth -ge $scaleHeight) {
 		Write-Host "`t'$vidNameSansExt' is Landscape or Square" ;
-		$bitRate = [double](25 * (${scaleWidth}/[double]${vidWidthBase})) ;
-		$maxRate = [double](28 * (${scaleWidth}/[double]${vidWidthBase})) ;
-		$bufSize = [double](14 * (${scaleWidth}/[double]${vidWidthBase})) ;
+		$bitRate = [double]($bitRate * (${scaleWidth}/[double]${vidLongBase})) ;
+		$maxRate = [double]($maxRate * (${scaleWidth}/[double]${vidLongBase})) ;
+		$bufSize = [double]($bufSize * (${scaleWidth}/[double]${vidLongBase})) ;
 	} else {
 		Write-Host "`t'$vidNameSansExt' is Portrait" ;
-		$bitRate = [double](25 * (${scaleHeight}/[double]${vidHeightBase})) ;
-		$maxRate = [double](28 * (${scaleHeight}/[double]${vidHeightBase})) ;
-		$bufSize = [double](14 * (${scaleHeight}/[double]${vidHeightBase})) ;
+		$bitRate = [double]($bitRate * (${scaleHeight}/[double]${vidLongBase})) ;
+		$maxRate = [double]($maxRate * (${scaleHeight}/[double]${vidLongBase})) ;
+		$bufSize = [double]($bufSize * (${scaleHeight}/[double]${vidLongBase})) ;
 	}
 
 
 	$baseFrameRate = 24 ;
-	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $HDRvid).Split("/") ;
+	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $SDRvid).Split("/") ;
 	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
 
 	if ($frameRateComp -gt ($baseFrameRate*2)) {
 		$frameRateComp = $frameRateComp - $baseFrameRate;
-	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3)) {
+	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
 		$frameRateComp = $frameRateComp - $baseFrameRate/4;
-	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1)) {
+	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
 		$frameRateComp = $frameRateComp - $baseFrameRate/8;
 	}
 
@@ -396,7 +408,8 @@ function compile-SDR-video {
 		$vidWidth,
 		$vidHeight,
 		$tune,
-		$preset
+		$preset,
+		$vidAspectRatio
 	)
 
 	if ($output -ne $Null) {
@@ -413,8 +426,13 @@ function compile-SDR-video {
 
 
 
-	$aspectRatioTop = [int]$aspectRatio.split("/")[0]; #width
-	$aspectRatioBot = [int]$aspectRatio.split("/")[1]; #height
+	$aspectRatioTop = [int]$aspectRatio.split(":")[0]; #width
+	$aspectRatioBot = [int]$aspectRatio.split(":")[1]; #height
+	$vidAspectRatioTop = [int]$vidAspectRatio.split(":")[0]; #width
+	$vidAspectRatioBot = [int]$vidAspectRatio.split(":")[1]; #height
+
+	echo $aspectRatio, $aspectRatioTop, $aspectRatioBot;
+
 
 	$bufWidth = $vidWidth ;
 	$bufHeight = $vidHeight ;
@@ -423,32 +441,39 @@ function compile-SDR-video {
 
 	 # example being if we have a 1440x1080p video and want 16:9 AR, width = 1080 * 16/9
 	 # alternatively, we have 1920x800p video and want 16:9 AR, height = 1920 * 9/16
-	if ($aspectRatioBot -gt $aspectRatioTop) {
+	if ($vidAspectRatioBot -gt $vidAspectRatioTop) {
 		Write-Host "`tAspect Ratio is Portrait" ;
 		if ($favorCommercialDimensions) {
-			if ($vidHeight -lt 1080) {
+			if ($vidHeight -le 1080) {
 				$scaleHeight = 1080
 				$bufHeight = 1080
-			} elseif ($vidHeight -gt 1920 -AND $vidHeight -lt 2160) {
+			} else {
 				$scaleHeight = 2160
 				$bufHeight = 2160
 			}
 		}
-		$bufWidth = [int]$scaleHeight*(${aspectRatioTop}/${aspectRatioBot}) ;
+		$bufWidth = [Math]::Ceiling([int]$bufHeight*(${aspectRatioTop}/${aspectRatioBot})) ;
 		$scaleWidth = -2 ;
 	} else {
 		Write-Host "`tAspect Ratio is Landscape or Square" ;
 		if ($favorCommercialDimensions) {
-			if ($vidWidth -lt 1920) {
+			if ($vidWidth -le 1920) {
 				$scaleWidth = 1920
 				$bufWidth = 1920
-			} elseif ($vidWidth -gt 1920 -AND $vidWidth -lt 3840) {
+			} else {
 				$scaleWidth = 3840
 				$bufWidth = 3840
 			}
 		}
-		$bufHeight = [int]$scaleWidth*(${aspectRatioBot}/${aspectRatioTop}) ;
+		$bufHeight = [Math]::Ceiling([int]$bufWidth*(${aspectRatioBot}/${aspectRatioTop})) ;
 		$scaleHeight = -2 ;
+	}
+
+	if (($bufWidth % 2) -ne 0) {
+		$bufWidth++;
+	}
+	if (($bufHeight % 2) -ne 0) {
+		$bufHeight++;
 	}
 
 	$filter = "scale=${scaleWidth}:${scaleheight}:force_original_aspect_ratio=decrease,pad=${bufWidth}:${bufHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1"
@@ -456,36 +481,35 @@ function compile-SDR-video {
 		$filter = -join("hqx=4,",$filter) #,",smartblur=lt=2")
 	}
 
-	$vidWidthBase = 1280 ;
-	$vidHeightBase = 720 ;
+	$vidLongBase = 1280 ;
 	$bitRate = 25 ;
 	$maxRate = 28 ;
 	$bufSize = 14 ;
 
 
 
-	if ($vidWidth -ge $vidHeight) {
+	if ($scaleWidth -ge $scaleHeight) {
 		Write-Host "`t'$vidNameSansExt' is Landscape or Square" ;
-		$bitRate = [double](25 * (${scaleWidth}/[double]${vidWidthBase})) ;
-		$maxRate = [double](28 * (${scaleWidth}/[double]${vidWidthBase})) ;
-		$bufSize = [double](14 * (${scaleWidth}/[double]${vidWidthBase})) ;
+		$bitRate = [double]($bitRate * (${scaleWidth}/[double]${vidLongBase})) ;
+		$maxRate = [double]($maxRate * (${scaleWidth}/[double]${vidLongBase})) ;
+		$bufSize = [double]($bufSize * (${scaleWidth}/[double]${vidLongBase})) ;
 	} else {
 		Write-Host "`t'$vidNameSansExt' is Portrait" ;
-		$bitRate = [double](25 * (${scaleHeight}/[double]${vidHeightBase})) ;
-		$maxRate = [double](28 * (${scaleHeight}/[double]${vidHeightBase})) ;
-		$bufSize = [double](14 * (${scaleHeight}/[double]${vidHeightBase})) ;
+		$bitRate = [double]($bitRate * (${scaleHeight}/[double]${vidLongBase})) ;
+		$maxRate = [double]($maxRate * (${scaleHeight}/[double]${vidLongBase})) ;
+		$bufSize = [double]($bufSize * (${scaleHeight}/[double]${vidLongBase})) ;
 	}
 
 
-	$baseFrameRate = [double][Math]::Log10(24) ;
+	$baseFrameRate = 24 ;
 	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $SDRvid).Split("/") ;
 	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
 
 	if ($frameRateComp -gt ($baseFrameRate*2)) {
 		$frameRateComp = $frameRateComp - $baseFrameRate;
-	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3)) {
+	} elseif (($frameRateComp -lt ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
 		$frameRateComp = $frameRateComp - $baseFrameRate/4;
-	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1)) {
+	} elseif (($frameRateComp -lt ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
 		$frameRateComp = $frameRateComp - $baseFrameRate/8;
 	}
 
@@ -679,7 +703,12 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 	$vidColorSp = (ffprobe -v error -select_streams v:0 -show_entries stream=color_space -of default=nk=1:nw=1 $vid) ;
 	$vidColorTr = (ffprobe -v error -select_streams v:0 -show_entries stream=color_transfer -of default=nk=1:nw=1 $vid) ;
 	$vidColorPr = (ffprobe -v error -select_streams v:0 -show_entries stream=color_primaries -of default=nk=1:nw=1 $vid) ;
-	$vidDuration = [double](ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 $vid)
+	$vidDuration = [double](ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 $vid) ;
+	$vidAspectRatio = (ffprobe -v error -select_streams v:0 -show_entries stream=display_aspect_ratio -of default=nk=1:nw=1 $vid) ;
+
+	if ($noPadding) {
+		$aspectRatio = $vidAspectRatio ;
+	}
 
 	if ($output -ne $Null) {
 		if ($outputIsLeaf -eq $True) {
@@ -713,7 +742,7 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 					dovi_tool -m 5 extract-rpu -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.DV-Data.bin"
 					dovi_tool remove -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
 
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight
+					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -aspectRatio $vidAspectRatio
 
 					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
 					$outputDoviDynaHDRVid = $outputDynaHDRVid.replace('HDR10p','DV8-HDR10p')
@@ -735,7 +764,7 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 					dovi_tool -m 5 extract-rpu -i "$DoviVidPath.hevc" -o "$DoviVidPath.DV-Data.bin"
 					dovi_tool remove -i "$DoviVidPath.hevc" -o "$DoviVidPath.HDR10-only.hevc"
 
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight
+					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
 
 					$outputDoviVid = "$outputVid.hevc".replace('HDR10-only','DV8')
 					$outputDoviMKVVid = $outputDoviVid.replace('hevc','mkv')
@@ -756,7 +785,7 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
 					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
 
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight
+					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
 
 					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
 
@@ -770,13 +799,13 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 				} else {
 					Write-Host "`t'$vidNameSansExt' has no Dynamic HDR metadata" ;
 
-					Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight
+					Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
 				}
 			}
 		}
 	else {
 			Write-Host "`t'$vidNameSansExt' is SDR or SDR is forced" ;
-			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight
+			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
 	}
 	Write-Host "------------"
 }
