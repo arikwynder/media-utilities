@@ -706,6 +706,10 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 	$vidDuration = [double](ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 $vid) ;
 	$vidAspectRatio = (ffprobe -v error -select_streams v:0 -show_entries stream=display_aspect_ratio -of default=nk=1:nw=1 $vid) ;
 
+	if($vidAspectRatio -eq "N/A" -OR $vidAspectRatio -eq $null ) {
+		$vidAspectRatio = "${vidWidth}:${vidHeight}" ;
+	}
+
 	if ($noPadding) {
 		$aspectRatio = $vidAspectRatio ;
 	}
