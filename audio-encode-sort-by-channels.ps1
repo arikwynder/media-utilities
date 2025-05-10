@@ -16,9 +16,9 @@ foreach ($file in Get-Childitem -path $path -recurse -depth 0 -file -include *.t
         }
 
         if ($ext -eq "wav") {
-            Move-Item -literalpath $i -destination "$path\${channel}ch\$j.wav"
+            Move-Item -literalpath $i -destination "$path\${channel}ch\$nameSansExt.wav"
         } else {
-            ffmpeg -i $file -c:a pcm_s24le -rf64 auto -async 0 "$path\${channels}ch\$j.wav"
+            ffmpeg -i $file -c:a pcm_s24le -rf64 auto -async 0 "$path\${channels}ch\$nameSansExt.wav"
         }    
     }
 
