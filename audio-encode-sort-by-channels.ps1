@@ -10,7 +10,7 @@ foreach ($file in Get-Childitem -path $path -recurse -depth 0 -file -include *.t
     $ext = [System.IO.Path]::GetExtension($file) ;
     $channels = (ffprobe -v error -select_streams a -show_entries stream=channels -of default=nk=1:nw=1 $file) ;
 
-    elseif (-NOT($skipStereo) -OR $channels -ne 2) {
+    if (-NOT($skipStereo) -OR $channels -ne 2) {
         if(-Not(Test-Path "$path\${channels}ch" -pathType container)) {
             New-Item "$path\${channels}ch" -itemtype directory -force;
         }
