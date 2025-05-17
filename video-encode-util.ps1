@@ -19,6 +19,8 @@ param(
 	[switch]$passthroughAudioExt,
 	[switch]$passthroughSubsExt,
 	[switch]$mobileMode,
+	[switch]$restore,
+	[switch]$halfBitRate,
 	[switch]$forcePath,
 	[switch]$h,
 	[switch]$help
@@ -502,8 +504,17 @@ function compile-SDR-video {
 
 
 	$baseFrameRate = 24 ;
+
 	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $SDRvid).Split("/") ;
-	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
+	$frameRateNom = $frameRateComp[0];
+	$frameRateDenom = $frameRateComp[1];
+
+	if ($frameRateDenom -eq $null -OR $frameRateDenom -eq "" -OR $frameRateDenom -eq 0) {
+		$frameRateDenom = 1 ;
+	}
+
+	$frameRateComp = [double]$frameRateNom / [double]($frameRateComp[1]) ;
+	$frameRateString = [String]($frameRateNom + "/" + $frameRateDenom) ;
 
 	if ($frameRateComp -gt ($baseFrameRate*2)) {
 		$frameRateComp = $frameRateComp - $baseFrameRate;
@@ -514,18 +525,40 @@ function compile-SDR-video {
 	}
 
 	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
-	$bitrateStr = -join(([Math]::Ceiling(($bitrate) * [double]($bitRateScale))).toString(),"M") ;
-	$maxrateStr = -join(([Math]::Ceiling(($maxrate) * [double]($bitRateScale))).toString(),"M") ;
-	$bufsizeStr = -join(([Math]::Ceiling((($maxrate) * [double]($bitRateScale)) / 2)).toString(),"M") ;
+
+	$bitrate = [Math]::Ceiling(($bitrate) * [double]($bitRateScale)) ;
+	$maxrate = [Math]::Ceiling(($maxrate) * [double]($bitRateScale)) ;
+	$bufsize = [Math]::Ceiling(($maxrate) * [double]($bitRateScale) / 2) ;
+
+	if ($halfBitRate) {
+		$bitrate = [Math]::Ceiling($bitrate / 2) ;
+		$maxrate = [Math]::Ceiling($maxrate / 2) ;
+		$bufsize = [Math]::Ceiling($bufsize / 2) ;
+	}
+
+	$bitrateStr = -join($bitrate.toString(),"M") ;
+	$maxrateStr = -join($maxrate.toString(),"M") ;
+	$bufsizeStr = -join($bufsize.toString(),"M") ;
 
 
-	if ($vidExt -eq "hevc") {
-		ffmpeg -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda $overwrite -i $SDRvid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
-	} elseif ($vidExt -eq "mkv") {
-		ffmpeg -ss $seek -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda $overwrite -i $SDRvid -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+	if ($restore) {
+		if ($vidExt -eq "hevc") {
+			nvencc64 --log-level warn -c hevc --avhw -i $SDRvid --output-depth 10 --lossless --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda $overwrite -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+		} elseif ($vidExt -eq "mkv") {
+			nvencc64 --log-level warn -c hevc --avhw -i $SDRvid --seek $seek --seekto $seekTo --output-depth 10 --lossless --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" $overwrite -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+		} else {
+			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
+			exit
+		}
 	} else {
-		Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
-		exit
+		if ($vidExt -eq "hevc") {
+			ffmpeg -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda $overwrite -i $SDRvid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+		} elseif ($vidExt -eq "mkv") {
+			ffmpeg -ss $seek -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda $overwrite -i $SDRvid -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+		} else {
+			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
+			exit
+		}
 	}
 
 	return "$SDRVidDir\$SDRVidNameSansExt.OUT"
