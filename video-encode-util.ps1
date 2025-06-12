@@ -2,13 +2,13 @@ param(
 
 	$startPath=".\",
 	$tune="grain",
-	$preset="fast",
+	$preset="medium",
 	$include='*.mkv',
 	$exclude='*.hevc',
-	$btrDivFactor=1,
 	$seek,
 	$seekTo,
 	$output,
+	[int]$compressionTier=1,
 	[String]$aspectRatio='16:9',
 	[switch]$antialias,
 	[switch]$favorCommercialDimensions,
@@ -89,20 +89,11 @@ function extract-extra-streams {
 		$audio,
 		$subs,
 		$audPassthrough,
-		$subPassthrough
+		$subPassthrough,
+		$vidNameSansExt,
+		$vidDir
 	)
 
-	if ($output -ne $Null) {
-		if ($outputIsLeaf -eq $True) {
-			$vidNameSansExt = $outputLeafSansExt ;
-		} else {
-			$vidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
-		}
-		$vidDir = $outputDir ;
-	} else {
-		$vidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
-		$vidDir = $vid.FullName | Split-Path
-	}
 
 	$command = "$overwrite -i '$vid' $seek $seekto " ;
 	if ($audio -eq $True) {
@@ -190,68 +181,68 @@ function extract-extra-streams {
 function Get-HDR-Color-Data {
 	param (
 		[Parameter(Mandatory)]
-		$HDRvid
+		$vid
 	)
 
-	$vidRedX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String red_x).toString()
+	$vidRedX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String red_x).toString()
 	$redXStart = $vidRedX.IndexOf("=")+1
 	$redXLength = ($vidRedX.IndexOf("/") - $vidRedX.IndexOf("="))-1
 	$vidRedX = $vidRedX.Substring($redXStart,$redXLength)
 
-	$vidRedY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String red_y).toString()
+	$vidRedY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String red_y).toString()
 	$redYStart = $vidRedY.IndexOf("=")+1
 	$redYLength = ($vidRedY.IndexOf("/") - $vidRedY.IndexOf("="))-1
 	$vidRedY = $vidRedY.Substring($redYStart,$redYLength)
 
-	$vidGreenX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String green_x).toString()
+	$vidGreenX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String green_x).toString()
 	$greenXStart = $vidgreenX.IndexOf("=")+1
 	$greenXLength = ($vidgreenX.IndexOf("/") - $vidgreenX.IndexOf("="))-1
 	$vidgreenX = $vidgreenX.Substring($greenXStart,$greenXLength)
 
-	$vidGreenY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String green_y).toString()
+	$vidGreenY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String green_y).toString()
 	$greenYStart = $vidgreenY.IndexOf("=")+1
 	$greenYLength = ($vidgreenY.IndexOf("/") - $vidgreenY.IndexOf("="))-1
 	$vidgreenY = $vidgreenY.Substring($greenYStart,$greenYLength)
 
-	$vidBlueX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String blue_x).toString()
+	$vidBlueX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String blue_x).toString()
 	$blueXStart = $vidblueX.IndexOf("=")+1
 	$blueXLength = ($vidblueX.IndexOf("/") - $vidblueX.IndexOf("="))-1
 	$vidblueX = $vidblueX.Substring($blueXStart,$blueXLength)
 
-	$vidBlueY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String blue_y).toString()
+	$vidBlueY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String blue_y).toString()
 	$blueYStart = $vidblueY.IndexOf("=")+1
 	$blueYLength = ($vidblueY.IndexOf("/") - $vidblueY.IndexOf("="))-1
 	$vidblueY = $vidblueY.Substring($blueYStart,$blueYLength)
 
-	$vidWhPoX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String white_point_x).toString()
+	$vidWhPoX = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String white_point_x).toString()
 	$whpoXStart = $vidwhpoX.IndexOf("=")+1
 	$whpoXLength = ($vidwhpoX.IndexOf("/") - $vidwhpoX.IndexOf("="))-1
 	$vidWhPoX = $vidwhpoX.Substring($whpoXStart,$whpoXLength)
 
-	$vidWhPoY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String white_point_y).toString()
+	$vidWhPoY = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String white_point_y).toString()
 	$whpoYStart = $vidwhpoY.IndexOf("=")+1
 	$whpoYLength = ($vidwhpoY.IndexOf("/") - $vidwhpoY.IndexOf("="))-1
 	$vidwhpoY = $vidwhpoY.Substring($whpoYStart,$whpoYLength)
 
-	$vidminlum = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String min_luminance).toString()
+	$vidminlum = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String min_luminance).toString()
 	$minlumStart = $vidminlum.IndexOf("=")+1
 	$minlumLength = ($vidminlum.IndexOf("/") - $vidminlum.IndexOf("="))-1
 	$vidminlum = $vidminlum.Substring($minlumStart,$minlumLength)
 
-	$vidmaxlum = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String max_luminance).toString()
+	$vidmaxlum = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_luminance).toString()
 	$maxlumStart = $vidmaxlum.IndexOf("=")+1
 	$maxlumLength = ($vidmaxlum.IndexOf("/") - $vidmaxlum.IndexOf("="))-1
 	$vidmaxlum = $vidmaxlum.Substring($maxlumStart,$maxlumLength)
 
-	$vidmaxcon = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String max_content).toString()
+	$vidmaxcon = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_content).toString()
 	$maxconStart = $vidmaxcon.IndexOf("=")+1
 	$vidmaxcon = $vidmaxcon.Substring($maxconStart)
 
-	$vidmaxavg = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid | Select-String max_average).toString()
+	$vidmaxavg = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_average).toString()
 	$maxavgStart = $vidmaxavg.IndexOf("=")+1
 	$vidmaxavg = $vidmaxavg.Substring($maxavgStart)
 
-	$vidMeta = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $HDRvid)
+	$vidMeta = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid)
 	$hasDynaHDR = ($vidMeta | Select-String ("HDR Dynamic Metadata")) -ne $null
 	$hasDoVi = ($vidMeta | Select-String ("Dolby Vision Metadata")) -ne $null
 
@@ -262,7 +253,7 @@ function Get-HDR-Color-Data {
 function compile-HDR-video {
 	param (
 		[Parameter(Mandatory)]
-		$HDRvid,
+		$vid,
 		$vidExt,
 		$vidRedX,
 		$vidRedY,
@@ -280,25 +271,11 @@ function compile-HDR-video {
 		$vidHeight,
 		$tune,
 		$preset,
-		$aspectRatio
+		$aspectRatio,
+		$vidNameSansExt,
+		$vidDir
 	)
 
-	if ($output -ne $Null) {
-		if ($outputIsLeaf -eq $True) {
-			$HDRVidNameSansExt = $outputLeafSansExt ;
-		} else {
-			$HDRVidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
-		}
-		$HDRVidDir = $outputDir ;
-	} else {
-		$HDRVidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($HDRvid) ;
-		$HDRVidDir = $HDRvid.FullName | Split-Path
-	}
-
-	if (-NOT($overwrite) -AND (Test-Path -literalPath "$HDRvidDir/$HDRVIDNameSansExt.OUT.$vidExt" -pathType leaf)) {
-		Write-Host "[WARNING] '$HDRVidDir/$HDRVIDNameSansExt.OUT.$vidExt' already exists. Skipping" -ForegroundColor Yellow ;
-		return ;
-	}
 
 
 	$aspectRatioTop = [int]$aspectRatio.split(":")[0]; #width
@@ -306,7 +283,6 @@ function compile-HDR-video {
 	$vidAspectRatioTop = [int]$vidAspectRatio.split(":")[0]; #width
 	$vidAspectRatioBot = [int]$vidAspectRatio.split(":")[1]; #height
 
-	echo $aspectRatio, $aspectRatioTop, $aspectRatioBot;
 
 
 	$bufWidth = $vidWidth ;
@@ -377,7 +353,7 @@ function compile-HDR-video {
 
 
 	$baseFrameRate = 24 ;
-	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $SDRvid).Split("/") ;
+	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $vid).Split("/") ;
 	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
 
 	if ($frameRateComp -gt ($baseFrameRate*2)) {
@@ -404,55 +380,43 @@ function compile-HDR-video {
 
 	if ($restore) {
 		if ($vidExt -eq "hevc") {
-			nvencc64 --log-level warn -c hevc --avhw -i $SDRvid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$HDRVidDir\$HDRVidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			nvencc64 --log-level warn -c hevc --avhw -i $SDRvid --seek $seek --seekto $seekTo --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$HDRVidDir\$HDRVidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --seek $seek --seekto $seekTo --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
 		}
 	} else {
 		if ($vidExt -eq "hevc") {
-			ffmpeg -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i $HDRvid -ss $seek -to $seekTo -map 0:v:0 -c:v libx265 -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$HDRVidDir\$HDRVidNameSansExt.OUT.$vidExt"
+			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -c:v libx265 -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			ffmpeg -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i $HDRvid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$HDRVidDir\$HDRVidNameSansExt.OUT.$vidExt"
+			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 		}
 	}
 
-	return "$HDRVidDir\$HDRVidNameSansExt.OUT"
+	return "$vidDir\$vidNameSansExt.OUT"
 
 }
 
 function compile-SDR-video {
 	param (
 		[Parameter(Mandatory)]
-		$SDRvid,
+		$vid,
 		$vidExt,
 		$vidWidth,
 		$vidHeight,
 		$tune,
 		$preset,
-		$vidAspectRatio
+		$vidAspectRatio,
+		$vidNameSansExt,
+		$vidDir
 	)
 
-	if ($output -ne $Null) {
-		if ($outputIsLeaf -eq $True) {
-			$SDRVidNameSansExt = $outputLeafSansExt ;
-		} else {
-			$SDRVidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
-		}
-		$SDRVidDir = $outputDir ;
-	} else {
-		$SDRVidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($SDRvid) ;
-		$SDRVidDir = $SDRvid.FullName | Split-Path
-	}
 
-	if (-NOT($overwrite) -AND (Test-Path -literalPath "$SDRVidDir/$SDRVIDNameSansExt.OUT.$vidExt" -pathType leaf)) {
-		Write-Host "[WARNING] '$SDRVidDir/$SDRVIDNameSansExt.OUT.$vidExt' already exists. Skipping" -ForegroundColor Yellow ;
-		return ;
-	}
+
 
 
 	$aspectRatioTop = [int]$aspectRatio.split(":")[0]; #width
@@ -460,8 +424,7 @@ function compile-SDR-video {
 	$vidAspectRatioTop = [int]$vidAspectRatio.split(":")[0]; #width
 	$vidAspectRatioBot = [int]$vidAspectRatio.split(":")[1]; #height
 
-	echo $aspectRatio, $aspectRatioTop, $aspectRatioBot;
-
+	$crf = 12 + (($compressionTier-1)*3);
 
 	$bufWidth = $vidWidth ;
 	$bufHeight = $vidHeight ;
@@ -505,88 +468,48 @@ function compile-SDR-video {
 		$bufHeight++;
 	}
 
+	$frameRate = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $vid).Split("/") ;
+	if ($frameRate.size -eq 1) {
+		$frameRate = $frameRate[1];
+	} elseif ($frameRate[1] -eq 0) {
+		$frameRate = $frameRate[1];
+	} else {
+		$frameRate = $frameRate[0] + "/" + $frameRate[1];
+	}
+
+
 	$filter = "scale=${scaleWidth}:${scaleheight}:force_original_aspect_ratio=decrease,pad=${bufWidth}:${bufHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1"
 	if ($antialias) {
-		$filter = -join("hqx=4,",$filter) #,",smartblur=lt=2")
+		$filter = -join("hqx=4,",$filter);
 	}
-
-	$vidLongBase = 1280 ;
-	$bitRate = 25 ;
-	$maxRate = 28 ;
-	$bufSize = 14 ;
-
-
-
-	if ($scaleWidth -ge $scaleHeight) {
-		Write-Host "`t'$vidNameSansExt' is Landscape or Square" ;
-		$bitRate = [double]($bitRate * (${scaleWidth}/[double]${vidLongBase})) ;
-		$maxRate = [double]($maxRate * (${scaleWidth}/[double]${vidLongBase})) ;
-		$bufSize = [double]($bufSize * (${scaleWidth}/[double]${vidLongBase})) ;
-	} else {
-		Write-Host "`t'$vidNameSansExt' is Portrait" ;
-		$bitRate = [double]($bitRate * (${scaleHeight}/[double]${vidLongBase})) ;
-		$maxRate = [double]($maxRate * (${scaleHeight}/[double]${vidLongBase})) ;
-		$bufSize = [double]($bufSize * (${scaleHeight}/[double]${vidLongBase})) ;
-	}
-
-
-	$baseFrameRate = 24 ;
-
-	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $SDRvid).Split("/") ;
-	$frameRateNom = $frameRateComp[0];
-	$frameRateDenom = $frameRateComp[1];
-
-	if ($frameRateDenom -eq $null -OR $frameRateDenom -eq "" -OR $frameRateDenom -eq 0) {
-		$frameRateDenom = 1 ;
-	}
-
-	$frameRateComp = [double]$frameRateNom / [double]($frameRateComp[1]) ;
-	$frameRateString = [String]($frameRateNom + "/" + $frameRateDenom) ;
-
-	if ($frameRateComp -gt ($baseFrameRate*2)) {
-		$frameRateComp = $frameRateComp - $baseFrameRate;
-	} elseif (($frameRateComp -le ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
-		$frameRateComp = $frameRateComp - $baseFrameRate/2;
-	} elseif (($frameRateComp -le ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
-		$frameRateComp = $frameRateComp - $baseFrameRate/4;
-	}
-
-	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
-
-	$bitrate = [Math]::Ceiling(($bitrate) * [double]($bitRateScale)) ;
-	$maxrate = [Math]::Ceiling(($maxrate) * [double]($bitRateScale)) ;
-	$bufsize = [Math]::Ceiling(($maxrate) * [double]($bitRateScale) / 2) ;
-
-	$bitrate = [Math]::Ceiling($bitrate / $btrDivFactor) ;
-	$maxrate = [Math]::Ceiling($maxrate / $btrDivFactor) ;
-	$bufsize = [Math]::Ceiling($bufsize / $btrDivFactor) ;
-
-	$bitrateStr = -join($bitrate.toString(),"M") ;
-	$maxrateStr = -join($maxrate.toString(),"M") ;
-	$bufsizeStr = -join($bufsize.toString(),"M") ;
 
 
 	if ($restore) {
+
+
 		if ($vidExt -eq "hevc") {
-			nvencc64 --log-level warn -c hevc --avhw -i $SDRvid --output-depth 10 --lossless --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --audio-copy  --videoformat ntsc --vpp-convolution3d "ythresh=1,cthresh=2,t_ythresh=2,t_cthresh=6" --vpp-deband "range=12,sample=2,thre_y=8,thre_cb=10,thre_cr=10,dither_y=2,dither_c=1,rand_each_frame" --vpp-libplacebo-deband "iterations=2,threshold=6,radius=8,grain_y=1,grain_c=0" -f hevc -o - --seek $seek --seekto $seekto | ffmpeg -r $framerate -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			nvencc64 --log-level warn -c hevc --avhw -i $SDRvid --seek $seek --seekto $seekTo --output-depth 10 --lossless --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --audio-copy  --videoformat ntsc --vpp-convolution3d "ythresh=1,cthresh=2,t_ythresh=2,t_cthresh=6" --vpp-libplacebo-deband "iterations=1,threshold=4,radius=8,grain_y=1,grain_c=0" -f nut -o - --seek $seek --seekto $seekto | ffmpeg -r "$framerate" -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i - -ss $seek -i $vid -map 0:v:0 -map 1:a? -map 1:s? -map 1:t? -map_chapters 1 -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
 		}
+
 	} else {
+
 		if ($vidExt -eq "hevc") {
-			ffmpeg -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i $SDRvid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+			ffmpeg -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			ffmpeg -ss $seek -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i $SDRvid -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$SDRVidDir\$SDRVidNameSansExt.OUT.$vidExt"
+			ffmpeg -ss $seek -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i $vid -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
 		}
+
 	}
 
-	return "$SDRVidDir\$SDRVidNameSansExt.OUT"
+	return "$vidDir\$vidNameSansExt.OUT"
 
 }
 
@@ -635,6 +558,12 @@ function Format-TimeToSeconds {
 
 if ($h -eq $True -OR $help -eq $True) {
 	Print-Help ;
+}
+
+if ($compressionTier -lt 1 -or $compressionTier -gt 5) {
+	Write-Host "[ERROR] -storageTier $compressionTier is an invalid value." -ForegroundColor Red ;
+	Write-Host "-storageTier needs to be an int between 1 (higher quality) and 5 (smaller size). Exiting..." -ForegroundColor Red ;
+	Exit ;
 }
 
 if ((Get-ChildItem -Recurse -Path $startPath -Include $include -Exclude $exclude).Count -lt 1) {
@@ -755,6 +684,24 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 	$vidDuration = [double](ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 $vid) ;
 	$vidAspectRatio = (ffprobe -v error -select_streams v:0 -show_entries stream=display_aspect_ratio -of default=nk=1:nw=1 $vid) ;
 
+	if ($output -ne $Null) {
+		if ($outputIsLeaf -eq $True) {
+			$vidNameSansExt = $outputLeafSansExt ;
+		} else {
+			$vidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
+		}
+		$outputDir = $output ;
+	} else {
+		$vidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
+		$outputDir = $vid.FullName | Split-Path
+	}
+
+
+	if (-NOT($overwrite) -AND ((Test-Path -literalPath "$outputDir/$vidNameSansExt.OUT.hevc" -pathType leaf) -OR (Test-Path -literalPath "$outputDir/$vidNameSansExt.OUT.mkv" -pathType leaf))) {
+		Write-Host "[WARNING] '$outputDir/$vidNameSansExt.OUT.$vidExt' already exists. Skipping" -ForegroundColor Yellow ;
+		continue ;
+	}
+
 	if($vidAspectRatio -eq "N/A" -OR $vidAspectRatio -eq $null ) {
 		$vidAspectRatio = "${vidWidth}:${vidHeight}" ;
 	}
@@ -763,16 +710,7 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 		$aspectRatio = $vidAspectRatio ;
 	}
 
-	if ($output -ne $Null) {
-		if ($outputIsLeaf -eq $True) {
-			$outputDir = Split-Path $output ;
-			$outputLeafSansExt = [System.IO.Path]::GetFileNameWithoutExtension($output) ;
-			Write-Host $outputDir "----------" $outputLeafSansExt -ForegroundColor Green
-		} else {
-			$outputDir = $output ;
-			Write-Host $outputDir "----------" -ForegroundColor Green
-		}
-	}
+
 
 	if ($subtractFromFinalTime) {
 		$seekTo = [String]([math]::round(($vidDuration - $seekTo),3))
@@ -781,6 +719,7 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 
 	Write-Host "Analyzing '$vidNameSansExt'..." -ForegroundColor Green ;
 	Write-Host "Processing '$vidNameSansExt'..."
+
 	if ($vidColorSp -eq "bt2020nc" -AND $vidColorTr -eq "smpte2084" -AND $vidColorPr -eq "bt2020" -AND -not($forceSDR)) {
 			Write-Host "`t'$vidNameSansExt' is HDR" ;
 			$vidRedX,$vidRedY,$vidGreenX,$vidGreenY,$vidBlueX,$vidBlueY,$vidWhPoX,$VidWhPoY,$vidminlum,$vidmaxlum,$vidmaxcon,$vidMaxAvg,$hasDynaHDR,$hasDoVi = Get-HDR-Color-Data $vid ;
@@ -788,14 +727,14 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 				if ($hasDynaHDR -eq $true) {
 					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs & HDR10+ SEIs" ;
 
-					$DoviHDR10pVidPath = mux-x265-raw $vid
+					$DoviHDR10pVidPath = mux-x265-raw $vid -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
 					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.DV.hevc"
 
 					dovi_tool -m 5 extract-rpu -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.DV-Data.bin"
 					dovi_tool remove -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
 
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -aspectRatio $vidAspectRatio
+					$outputVid = Compile-HDR-Video -vid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -aspectRatio $vidAspectRatio -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 
 					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
 					$outputDoviDynaHDRVid = $outputDynaHDRVid.replace('HDR10p','DV8-HDR10p')
@@ -812,12 +751,12 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 				} else {
 					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs" ;
 
-					$DoviVidPath = mux-x265-raw $vid
+					$DoviVidPath = mux-x265-raw $vid -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 
 					dovi_tool -m 5 extract-rpu -i "$DoviVidPath.hevc" -o "$DoviVidPath.DV-Data.bin"
 					dovi_tool remove -i "$DoviVidPath.hevc" -o "$DoviVidPath.HDR10-only.hevc"
 
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
+					$outputVid = Compile-HDR-Video -vid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 
 					$outputDoviVid = "$outputVid.hevc".replace('HDR10-only','DV8')
 					$outputDoviMKVVid = $outputDoviVid.replace('hevc','mkv')
@@ -834,11 +773,11 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 				if ($hasDynaHDR -eq $true) {
 					Write-Host "`t'$vidNameSansExt' has HDR10+ SEIs" ;
 
-					$DoviHDR10pVidPath = mux-x265-raw $vid
+					$DoviHDR10pVidPath = mux-x265-raw $vid -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
 					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
 
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
+					$outputVid = Compile-HDR-Video -vid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 
 					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
 
@@ -852,388 +791,14 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 				} else {
 					Write-Host "`t'$vidNameSansExt' has no Dynamic HDR metadata" ;
 
-					Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
+					Compile-HDR-Video -vid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 				}
 			}
 		}
 	else {
 			Write-Host "`t'$vidNameSansExt' is SDR or SDR is forced" ;
-			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio
+			Compile-SDR-Video -vid $vid -vidExt "mkv" -tune $tune -preset $preset -vidWidth $vidWidth -vidHeight $vidHeight -vidAspectRatio $vidAspectRatio -vidNameSansExt $vidNameSansExt -vidDir $outputDir
 	}
 	Write-Host "------------"
 }
 
-
-<#
-foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Exclude $exclude ) {
-	$vidNameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($vid) ;
-	$vidDir = $vid.DirectoryName ;
-	$vidHeight = (ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=nk=1:nw=1 $vid) ;
-	$vidWidth = (ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=nk=1:nw=1 $vid) ;
-	$vidColorSp = (ffprobe -v error -select_streams v:0 -show_entries stream=color_space -of default=nk=1:nw=1 $vid) ;
-	$vidColorTr = (ffprobe -v error -select_streams v:0 -show_entries stream=color_transfer -of default=nk=1:nw=1 $vid) ;
-	$vidColorPr = (ffprobe -v error -select_streams v:0 -show_entries stream=color_primaries -of default=nk=1:nw=1 $vid) ;
-
-	if ($output -ne $Null) {
-		if ($outputIsLeaf -eq $True) {
-			$outputDir = Split-Path $output ;
-			$outputLeafSansExt = [System.IO.Path]::GetFileNameWithoutExtension($output) ;
-			Write-Host $outputDir "----------" $outputLeafSansExt -ForegroundColor Green
-		} else {
-			$outputDir = $output ;
-			Write-Host $outputDir "----------" -ForegroundColor Green
-		}
-	}
-
-	Write-Host "Analyzing '$vidNameSansExt'..." -ForegroundColor Green ;
-	if ($vidHeight -eq 720 -AND $vidWidth -eq 1280) {
-		Write-Host "------------" -ForegroundColor DarkYellow ;
-		Write-Host "'$vidNameSansExt' is Wide XGA (" (-join("$vidWidth","x","$vidHeight")) ")" -ForegroundColor DarkYellow ;
-		Write-Host "Processing '$vidNameSansExt'..." -ForegroundColor DarkYellow ;
-
-		if ($vidColorSp -eq "bt2020nc" -AND $vidColorTr -eq "smpte2084" -AND $vidColorPr -eq "bt2020") {
-			Write-Host "`t'$vidNameSansExt' is HDR" -ForegroundColor DarkYellow ;
-			$vidRedX,$vidRedY,$vidGreenX,$vidGreenY,$vidBlueX,$vidBlueY,$vidWhPoX,$VidWhPoY,$vidminlum,$vidmaxlum,$vidmaxcon,$vidMaxAvg,$hasDynaHDR,$hasDoVi = Get-HDR-Color-Data $vid ;
-			if ($hasDovi -eq $true) {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs & HDR10+ SEIs" -ForegroundColor DarkYellow ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.DV.hevc"
-
-					dovi_tool -m 5 extract-rpu -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "24M" -maxrate "32M" -bufsize "16M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-					$outputDoviDynaHDRVid = $outputDynaHDRVid.replace('HDR10p','DV8-HDR10p')
-					$outputDoviDynaHDRMKVVid = $outputDoviDynaHDRVid.replace('hevc','mkv')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-					dovi_tool inject-rpu -i $outputDynaHDRVid -rpu-in "$DoviHDR10pVidPath.DV-Data.bin" -o $outputDoviDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDoviDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs" -ForegroundColor DarkYellow ;
-
-					$DoviVidPath = mux-x265-raw $vid
-
-					dovi_tool -m 5 extract-rpu -i "$DoviVidPath.hevc" -o "$DoviVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviVidPath.hevc" -o "$DoviVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "24M" -maxrate "32M" -bufsize "16M" -tune $tune -preset $preset
-
-					$outputDoviVid = "$outputVid.hevc".replace('HDR10-only','DV8')
-					$outputDoviMKVVid = $outputDoviVid.replace('hevc','mkv')
-
-					dovi_tool inject-rpu -i "$outputVid.hevc" -rpu-in "$DoviVidPath.DV-Data.bin" -o $outputDoviVid
-
-					mkvmerge -o $outputDoviVid $outputDoviMKVVid
-
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-				}
-			} else {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has HDR10+ SEIs" -ForegroundColor DarkYellow ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "24M" -maxrate "32M" -bufsize "16M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has no Dynamic HDR metadata" -ForegroundColor DarkYellow ;
-
-					Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "24M" -maxrate "32M" -bufsize "16M" -tune $tune -preset $preset
-				}
-			}
-		}
-		else {
-			Write-Host "`t'$vidNameSansExt' is SDR" -ForegroundColor DarkYellow ;
-			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -bitrate "24M" -maxrate "32M" -bufsize "16M" -tune $tune -preset $preset
-		}
-		Write-Host "------------" -ForegroundColor DarkYellow ;
-
-	} elseif ($vidHeight -eq 1080 -AND $vidWidth -eq 1920) {
-		Write-Host "------------" -ForegroundColor Blue ;
-		Write-Host "'$vidNameSansExt' is Full HD (" (-join("$vidWidth","x","$vidHeight")) ")" -ForegroundColor Blue ;
-		Write-Host "Processing '$vidNameSansExt'..." -ForegroundColor Blue ;
-
-		if ($vidColorSp -eq "bt2020nc" -AND $vidColorTr -eq "smpte2084" -AND $vidColorPr -eq "bt2020") {
-			Write-Host "`t'$vidNameSansExt' is HDR" -ForegroundColor Blue ;
-			$vidRedX,$vidRedY,$vidGreenX,$vidGreenY,$vidBlueX,$vidBlueY,$vidWhPoX,$VidWhPoY,$vidminlum,$vidmaxlum,$vidmaxcon,$vidMaxAvg,$hasDynaHDR,$hasDoVi = Get-HDR-Color-Data $vid ;
-			if ($hasDovi -eq $true) {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs & HDR10+ SEIs" -ForegroundColor Blue ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.DV.hevc"
-
-					dovi_tool -m 5 extract-rpu -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "38M" -maxrate "42M" -bufsize "21M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-					$outputDoviDynaHDRVid = $outputDynaHDRVid.replace('HDR10p','DV8-HDR10p')
-					$outputDoviDynaHDRMKVVid = $outputDoviDynaHDRVid.replace('hevc','mkv')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-					dovi_tool inject-rpu -i $outputDynaHDRVid -rpu-in "$DoviHDR10pVidPath.DV-Data.bin" -o $outputDoviDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDoviDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs" -ForegroundColor Blue ;
-
-					$DoviVidPath = mux-x265-raw $vid
-
-					dovi_tool -m 5 extract-rpu -i "$DoviVidPath.hevc" -o "$DoviVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviVidPath.hevc" -o "$DoviVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "38M" -maxrate "42M" -bufsize "21M" -tune $tune -preset $preset
-
-					$outputDoviVid = "$outputVid.hevc".replace('HDR10-only','DV8')
-					$outputDoviMKVVid = $outputDoviVid.replace('hevc','mkv')
-
-					dovi_tool inject-rpu -i "$outputVid.hevc" -rpu-in "$DoviVidPath.DV-Data.bin" -o $outputDoviVid
-
-					mkvmerge -o $outputDoviVid $outputDoviMKVVid
-
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-				}
-			} else {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has HDR10+ SEIs" -ForegroundColor Blue ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "38M" -maxrate "42M" -bufsize "21M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has no Dynamic HDR metadata" -ForegroundColor Blue ;
-
-					Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "38M" -maxrate "42M" -bufsize "21M" -tune $tune -preset $preset
-				}
-			}
-		}
-		else {
-			Write-Host "`t'$vidNameSansExt' is SDR" -ForegroundColor Blue ;
-			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -bitrate "38M" -maxrate "42M" -bufsize "21M" -tune $tune -preset $preset
-		}
-		Write-Host "------------" -ForegroundColor Blue ;
-
-	} elseif ($vidHeight -eq 1440 -AND $vidWidth -eq 2560) {
-		Write-Host "------------" -ForegroundColor Cyan ;
-		Write-Host "'$vidNameSansExt' is Quad HD (" (-join("$vidWidth","x","$vidHeight")) ")" -ForegroundColor Cyan ;
-		Write-Host "Processing '$vidNameSansExt'..." -ForegroundColor Cyan ;
-
-		if ($vidColorSp -eq "bt2020nc" -AND $vidColorTr -eq "smpte2084" -AND $vidColorPr -eq "bt2020") {
-			Write-Host "`t'$vidNameSansExt' is HDR" -ForegroundColor Cyan ;
-			$vidRedX,$vidRedY,$vidGreenX,$vidGreenY,$vidBlueX,$vidBlueY,$vidWhPoX,$VidWhPoY,$vidminlum,$vidmaxlum,$vidmaxcon,$vidMaxAvg,$hasDynaHDR,$hasDoVi = Get-HDR-Color-Data $vid ;
-			if ($hasDovi -eq $true) {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs & HDR10+ SEIs" -ForegroundColor Cyan ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.DV.hevc"
-
-					dovi_tool -m 5 extract-rpu -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "54M" -maxrate "62M" -bufsize "31M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-					$outputDoviDynaHDRVid = $outputDynaHDRVid.replace('HDR10p','DV8-HDR10p')
-					$outputDoviDynaHDRMKVVid = $outputDoviDynaHDRVid.replace('hevc','mkv')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-					dovi_tool inject-rpu -i $outputDynaHDRVid -rpu-in "$DoviHDR10pVidPath.DV-Data.bin" -o $outputDoviDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDoviDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs" -ForegroundColor Cyan ;
-
-					$DoviVidPath = mux-x265-raw $vid
-
-					dovi_tool -m 5 extract-rpu -i "$DoviVidPath.hevc" -o "$DoviVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviVidPath.hevc" -o "$DoviVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "54M" -maxrate "62M" -bufsize "31M" -tune $tune -preset $preset
-
-					$outputDoviVid = "$outputVid.hevc".replace('HDR10-only','DV8')
-					$outputDoviMKVVid = $outputDoviVid.replace('hevc','mkv')
-
-					dovi_tool inject-rpu -i "$outputVid.hevc" -rpu-in "$DoviVidPath.DV-Data.bin" -o $outputDoviVid
-
-					mkvmerge -o $outputDoviVid $outputDoviMKVVid
-
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-				}
-			} else {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has HDR10+ SEIs" -ForegroundColor Cyan ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "54M" -maxrate "62M" -bufsize "31M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-						Write-Host "`t'$vidNameSansExt' has no Dynamic HDR metadata" -ForegroundColor Cyan ;
-
-						Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "54M" -maxrate "62M" -bufsize "31M" -tune $tune -preset $preset
-				}
-			}
-		} else {
-			Write-Host "`t'$vidNameSansExt' is SDR" -ForegroundColor Cyan ;
-			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -bitrate "54M" -maxrate "62M" -bufsize "31M" -tune $tune -preset $preset
-		}
-		Write-Host "------------" -ForegroundColor Cyan ;
-
-	} elseif ($vidHeight -eq 2160 -AND $vidWidth -eq 3840) {
-		Write-Host "------------" -ForegroundColor Magenta ;
-		Write-Host "'$vidNameSansExt' is Ultra HD (" (-join("$vidWidth","x","$vidHeight")) ")" -ForegroundColor Magenta ;
-		Write-Host "Processing '$vidNameSansExt'..." -ForegroundColor Magenta ;
-
-		if ($vidColorSp -eq "bt2020nc" -AND $vidColorTr -eq "smpte2084" -AND $vidColorPr -eq "bt2020") {
-			Write-Host "`t'$vidNameSansExt' is HDR" -ForegroundColor Magenta ;
-			$vidRedX,$vidRedY,$vidGreenX,$vidGreenY,$vidBlueX,$vidBlueY,$vidWhPoX,$VidWhPoY,$vidminlum,$vidmaxlum,$vidmaxcon,$vidMaxAvg,$hasDynaHDR,$hasDoVi = Get-HDR-Color-Data $vid ;
-			if ($hasDovi -eq $true) {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs & HDR10+ SEIs" -ForegroundColor Magenta ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.DV.hevc"
-
-					dovi_tool -m 5 extract-rpu -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviHDR10pVidPath.DV.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "65M" -maxrate "75M" -bufsize "37M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-					$outputDoviDynaHDRVid = $outputDynaHDRVid.replace('HDR10p','DV8-HDR10p')
-					$outputDoviDynaHDRMKVVid = $outputDoviDynaHDRVid.replace('hevc','mkv')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-					dovi_tool inject-rpu -i $outputDynaHDRVid -rpu-in "$DoviHDR10pVidPath.DV-Data.bin" -o $outputDoviDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDoviDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs" -ForegroundColor Magenta ;
-
-					$DoviVidPath = mux-x265-raw $vid
-
-					dovi_tool -m 5 extract-rpu -i "$DoviVidPath.hevc" -o "$DoviVidPath.DV-Data.bin"
-					dovi_tool remove -i "$DoviVidPath.hevc" -o "$DoviVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "65M" -maxrate "75M" -bufsize "37M" -tune $tune -preset $preset
-
-					$outputDoviVid = "$outputVid.hevc".replace('HDR10-only','DV8')
-					$outputDoviMKVVid = $outputDoviVid.replace('hevc','mkv')
-
-					dovi_tool inject-rpu -i "$outputVid.hevc" -rpu-in "$DoviVidPath.DV-Data.bin" -o $outputDoviVid
-
-					mkvmerge -o $outputDoviVid $outputDoviMKVVid
-
-					Remove-Item "$DoviHDR10pVidPath.DV-Data.bin" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-				}
-			} else {
-				if ($hasDynaHDR -eq $true) {
-					Write-Host "`t'$vidNameSansExt' has HDR10+ SEIs" -ForegroundColor Magenta ;
-
-					$DoviHDR10pVidPath = mux-x265-raw $vid
-					hdr10plus_tool extract -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10p-Data.json"
-					hdr10plus_tool remove -i "$DoviHDR10pVidPath.hevc" -o "$DoviHDR10pVidPath.HDR10-only.hevc"
-
-					$outputVid = Compile-HDR-Video -HDRvid "$DoviHDR10pVidPath.HDR10-only.hevc" -vidExt "hevc" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "65M" -maxrate "75M" -bufsize "37M" -tune $tune -preset $preset
-
-					$outputDynaHDRVid = "$outputVid.hevc".replace('HDR10-only','HDR10p')
-
-					hdr10plus_tool inject -i "$outputVid.hevc" -j "$DoviHDR10pVidPath.HDR10p-Data.json" -o $outputDynaHDRVid
-
-					mkvmerge -o $outputDoviDynaHDRMKVVid $outputDynaHDRVid
-
-					Remove-Item "$DoviHDR10pVidPath.HDR10p-Data.json" -Force
-					Remove-Item "$DoviHDR10pVidPath.*.hevc" -Force
-
-				} else {
-					Write-Host "`t'$vidNameSansExt' has no Dynamic HDR metadata" -ForegroundColor Magenta ;
-
-					Compile-HDR-Video -HDRvid $vid -vidExt "mkv" -vidRedX $vidRedX -vidRedY $vidRedY -vidGreenX $vidGreenX -vidGreenY $vidGreenY -vidBlueX $vidBlueX -vidBlueY $vidBlueY -vidWhPoX $vidWhPoX -VidWhPoY $VidWhPoY -vidminlum $vidminlum -vidmaxlum $vidmaxlum -vidmaxcon $vidmaxcon -vidMaxAvg $vidMaxAvg -bitrate "65M" -maxrate "75M" -bufsize "37M" -tune $tune -preset $preset
-				}
-			}
-		} else {
-			Write-Host "`t'$vidNameSansExt' is SDR" -ForegroundColor Magenta ;
-			Compile-SDR-Video -SDRvid $vid -vidExt "mkv" -bitrate "65M" -maxrate "75M" -bufsize "37M" -tune $tune -preset $preset
-		}
-		Write-Host "------------" -ForegroundColor Magenta ;
-
-	} else {
-		Write-Host "------------" -ForegroundColor Red ;
-		Write-Host "'$vidNameSansExt' has an Unrecognized Resolution." -ForegroundColor Red ;
-		Write-Host "Skipping '$vidNameSansExt'..." -ForegroundColor Red ;
-		Write-Host "------------" -ForegroundColor Red ;
-
-	}
-}
-#>
