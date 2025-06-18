@@ -277,13 +277,12 @@ function compile-HDR-video {
 	)
 
 
-
 	$aspectRatioTop = [int]$aspectRatio.split(":")[0]; #width
 	$aspectRatioBot = [int]$aspectRatio.split(":")[1]; #height
 	$vidAspectRatioTop = [int]$vidAspectRatio.split(":")[0]; #width
 	$vidAspectRatioBot = [int]$vidAspectRatio.split(":")[1]; #height
 
-
+	$crf = 12 + (($compressionTier-1)*3);
 
 	$bufWidth = $vidWidth ;
 	$bufHeight = $vidHeight ;
@@ -327,58 +326,25 @@ function compile-HDR-video {
 		$bufHeight++;
 	}
 
+	$frameRate = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $vid).Split("/") ;
+	if ($frameRate.size -eq 1) {
+		$frameRate = $frameRate[1];
+	} elseif ($frameRate[1] -eq 0) {
+		$frameRate = $frameRate[1];
+	} else {
+		$frameRate = $frameRate[0] + "/" + $frameRate[1];
+	}
+
+
 	$filter = "scale=${scaleWidth}:${scaleheight}:force_original_aspect_ratio=decrease,pad=${bufWidth}:${bufHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1"
 	if ($antialias) {
-		$filter = -join("hqx=4,",$filter) #,",smartblur=lt=2")
+		$filter = -join("hqx=4,",$filter);
 	}
 
-	$vidLongBase = 1280 ;
-	$bitRate = 25 ;
-	$maxRate = 28 ;
-	$bufSize = 14 ;
-
-
-
-	if ($scaleWidth -ge $scaleHeight) {
-		Write-Host "`t'$vidNameSansExt' is Landscape or Square" ;
-		$bitRate = [double]($bitRate * (${scaleWidth}/[double]${vidLongBase})) ;
-		$maxRate = [double]($maxRate * (${scaleWidth}/[double]${vidLongBase})) ;
-		$bufSize = [double]($bufSize * (${scaleWidth}/[double]${vidLongBase})) ;
-	} else {
-		Write-Host "`t'$vidNameSansExt' is Portrait" ;
-		$bitRate = [double]($bitRate * (${scaleHeight}/[double]${vidLongBase})) ;
-		$maxRate = [double]($maxRate * (${scaleHeight}/[double]${vidLongBase})) ;
-		$bufSize = [double]($bufSize * (${scaleHeight}/[double]${vidLongBase})) ;
-	}
-
-
-	$baseFrameRate = 24 ;
-	$frameRateComp = (ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=nk=1:nw=1 $vid).Split("/") ;
-	$frameRateComp = [double]($frameRateComp[0]) / [double]($frameRateComp[1]) ;
-
-	if ($frameRateComp -gt ($baseFrameRate*2)) {
-		$frameRateComp = $frameRateComp - $baseFrameRate;
-	} elseif (($frameRateComp -le ($baseFrameRate*2)) -AND ($frameRateComp -gt ($baseFrameRate*1.3))) {
-		$frameRateComp = $frameRateComp - $baseFrameRate/2;
-	} elseif (($frameRateComp -le ($baseFrameRate*1.3)) -AND ($frameRateComp -gt ($baseFrameRate*1.1))) {
-		$frameRateComp = $frameRateComp - $baseFrameRate/4;
-	}
-
-	$bitRateScale = [double]($frameRateComp / $baseFrameRate) ;
-
-	$bitrate = [Math]::Ceiling(($bitrate) * [double]($bitRateScale)) ;
-	$maxrate = [Math]::Ceiling(($maxrate) * [double]($bitRateScale)) ;
-	$bufsize = [Math]::Ceiling(($maxrate) * [double]($bitRateScale) / 2) ;
-
-	$bitrate = [Math]::Ceiling($bitrate / $btrDivFactor) ;
-	$maxrate = [Math]::Ceiling($maxrate / $btrDivFactor) ;
-	$bufsize = [Math]::Ceiling($bufsize / $btrDivFactor) ;
-
-	$bitrateStr = -join($bitrate.toString(),"M") ;
-	$maxrateStr = -join($maxrate.toString(),"M") ;
-	$bufsizeStr = -join($bufsize.toString(),"M") ;
 
 	if ($restore) {
+
+
 		if ($vidExt -eq "hevc") {
 			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
@@ -387,7 +353,9 @@ function compile-HDR-video {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
 		}
+
 	} else {
+
 		if ($vidExt -eq "hevc") {
 			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -c:v libx265 -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
@@ -395,6 +363,7 @@ function compile-HDR-video {
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 		}
+		
 	}
 
 	return "$vidDir\$vidNameSansExt.OUT"
