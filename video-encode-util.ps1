@@ -8,6 +8,8 @@ param(
 	$seek,
 	$seekTo,
 	$output,
+	[int]$HDRMaxCon,
+	[int]$HDRMaxAvg,
 	[int]$compressionTier=1,
 	[String]$aspectRatio='16:9',
 	[switch]$antialias,
@@ -234,13 +236,25 @@ function Get-HDR-Color-Data {
 	$maxlumLength = ($vidmaxlum.IndexOf("/") - $vidmaxlum.IndexOf("="))-1
 	$vidmaxlum = $vidmaxlum.Substring($maxlumStart,$maxlumLength)
 
-	$vidmaxcon = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_content).toString()
-	$maxconStart = $vidmaxcon.IndexOf("=")+1
-	$vidmaxcon = $vidmaxcon.Substring($maxconStart)
+	$vidmaxcon = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_content) ;
+	if ( $vidmaxCon -ne $NULL ) {
+		$vidMaxCon = $vidMaxCon.toString() ;
+		$maxconStart = $vidmaxcon.IndexOf("=")+1 ;
+		$vidmaxcon = $vidmaxcon.Substring($maxconStart) ;
+	} else {
+		Write-Host "`tVidMaxCon is null. Using Default Value: 1000." ;
+		$vidmaxCon = 1000 ;
+	}
 
-	$vidmaxavg = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_average).toString()
-	$maxavgStart = $vidmaxavg.IndexOf("=")+1
-	$vidmaxavg = $vidmaxavg.Substring($maxavgStart)
+	$vidmaxavg = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid | Select-String max_average) ;
+	if ( $vidmaxAvg -ne $NULL ) {
+		$vidmaxAvg = $vidmaxAvg.toString()
+		$maxavgStart = $vidmaxavg.IndexOf("=")+1
+		$vidmaxavg = $vidmaxavg.Substring($maxavgStart)
+	} else {
+		Write-Host "`tVidMaxAvg is null. Using Default Value: 400." ;
+		$vidmaxAvg = 400 ;
+	}
 
 	$vidMeta = (ffprobe -v error -read_intervals "%+#1" -select_streams v:0 -show_frames -show_entries frame -of default=nk=0:nw=1 $vid)
 	$hasDynaHDR = ($vidMeta | Select-String ("HDR Dynamic Metadata")) -ne $null
@@ -271,7 +285,7 @@ function compile-HDR-video {
 		$vidHeight,
 		$tune,
 		$preset,
-		$aspectRatio,
+		$vidAspectRatio,
 		$vidNameSansExt,
 		$vidDir
 	)
@@ -346,9 +360,9 @@ function compile-HDR-video {
 
 
 		if ($vidExt -eq "hevc") {
-			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			nvencc64 --log-level warn -c hevc --avhw -i $vid --seek $seek --seekto $seekTo --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --seek $seek --seekto $seekTo --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
@@ -357,9 +371,9 @@ function compile-HDR-video {
 	} else {
 
 		if ($vidExt -eq "hevc") {
-			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -c:v libx265 -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -c:v libx265 -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -b:v $bitrateStr -maxrate:v $maxrateStr -bufsize:v $bufsizeStr -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 		}
@@ -692,6 +706,15 @@ foreach ($vid in Get-ChildItem -Recurse -Path $startPath -Include $include -Excl
 	if ($vidColorSp -eq "bt2020nc" -AND $vidColorTr -eq "smpte2084" -AND $vidColorPr -eq "bt2020" -AND -not($forceSDR)) {
 			Write-Host "`t'$vidNameSansExt' is HDR" ;
 			$vidRedX,$vidRedY,$vidGreenX,$vidGreenY,$vidBlueX,$vidBlueY,$vidWhPoX,$VidWhPoY,$vidminlum,$vidmaxlum,$vidmaxcon,$vidMaxAvg,$hasDynaHDR,$hasDoVi = Get-HDR-Color-Data $vid ;
+
+			if ($HDRMaxCon -ne $NULL -AND $HDRMaxAvg -ne $NULL) {
+
+				Write-Host "`t-HDRMaxCon and -HDRMaxAvg is provided. Inserting values: $HDRMaxCon & $HDRMaxAvg." ;
+				$vidmaxCon = $HDRMaxCon ;
+				$vidMaxAvg = $HDRMaxAvg ;
+
+			}
+
 			if ($hasDovi -eq $true) {
 				if ($hasDynaHDR -eq $true) {
 					Write-Host "`t'$vidNameSansExt' has Dolby Vison RPUs & HDR10+ SEIs" ;
