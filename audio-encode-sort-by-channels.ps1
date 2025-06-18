@@ -3,7 +3,7 @@ param(
     [switch]$skipStereo
 )
 
-foreach ($file in Get-Childitem -path $path -recurse -depth 0 -file -include *.thd,*.dts,*.eac3,*.ac3,*.m4a,*.flac,*.wav ) {
+foreach ($file in Get-Childitem -path $path -recurse -depth 0 -file -include *.thd,*.dts,*.eac3,*.ac3,*.m4a,*.flac,*.wav,*.opus ) {
 
     $directoryName = $file.directoryname ;
     $nameSansExt = [System.IO.Path]::GetFileNameWithoutExtension($file) ;
