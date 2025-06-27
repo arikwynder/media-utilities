@@ -13,6 +13,7 @@ param(
 	[int]$compressionTier=1,
 	[String]$aspectRatio='16:9',
 	[switch]$antialias,
+	[switch]$encodeFLAC,
 	[switch]$favorCommercialDimensions,
 	[switch]$noPadding,
 	[switch]$forceSDR,
@@ -360,9 +361,9 @@ function compile-HDR-video {
 
 
 		if ($vidExt -eq "hevc") {
-			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f hevc -o - | ffmpeg -f hevc -r "$frameRateString" -hwaccel cuda -hwaccel_device 0 -hwaccel_output_format cuda -y -i - -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a $acodec -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			nvencc64 --log-level warn -c hevc --avhw -i $vid --seek $seek --seekto $seekTo --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --seek $seek --seekto $seekTo --output-depth 10 --lossless --videoformat ntsc --colorrange auto --videoformat ntsc --colormatrix auto --colorprim auto --transfer auto --chromaloc auto --max-cll copy --master-display copy --audio-copy --sub-copy --chapter-copy --videoformat ntsc --vpp-convolution3d "ythresh=0,cthresh=4,t_ythresh=1,t_cthresh=6" --vpp-libplacebo-deband "iterations=6,threshold=6,radius=18,grain_y=10,grain_c=1" -f nut -o - | ffmpeg -f nut -r "$frameRateString" -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a $acodec -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
@@ -373,7 +374,7 @@ function compile-HDR-video {
 		if ($vidExt -eq "hevc") {
 			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -c:v libx265 -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			ffmpeg -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a $acodec -c:s copy -x265-params "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G($vidGreenX,$vidGreenY)B($vidBlueX,$vidBlueY)R($vidRedX,$vidRedY)WP($vidWhPoX,$VidWhPoY)L($vidmaxlum,$vidminlum):max-cll=$vidmaxcon,$vidMaxAvg" -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 		}
@@ -399,7 +400,8 @@ function compile-SDR-video {
 	)
 
 
-
+	$acodec = "copy" ;
+	if ($encodeFLAC) { $acodec = "flac" }
 
 
 	$aspectRatioTop = [int]$aspectRatio.split(":")[0]; #width
@@ -471,9 +473,9 @@ function compile-SDR-video {
 
 
 		if ($vidExt -eq "hevc") {
-			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --audio-copy  --videoformat ntsc --vpp-convolution3d "ythresh=1,cthresh=2,t_ythresh=2,t_cthresh=6" --vpp-deband "range=12,sample=2,thre_y=8,thre_cb=10,thre_cr=10,dither_y=2,dither_c=1,rand_each_frame" --vpp-libplacebo-deband "iterations=2,threshold=6,radius=8,grain_y=1,grain_c=0" -f hevc -o - --seek $seek --seekto $seekto | ffmpeg -r $framerate -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --audio-copy  --videoformat ntsc --vpp-convolution3d "ythresh=1,cthresh=2,t_ythresh=2,t_cthresh=6" --vpp-deband "range=12,sample=2,thre_y=8,thre_cb=10,thre_cr=10,dither_y=2,dither_c=1,rand_each_frame" --vpp-libplacebo-deband "iterations=2,threshold=6,radius=8,grain_y=1,grain_c=0" -f hevc -o - --seek $seek --seekto $seekto | ffmpeg -r $framerate -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i - -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a $acodec -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --audio-copy  --videoformat ntsc --vpp-convolution3d "ythresh=1,cthresh=2,t_ythresh=2,t_cthresh=6" --vpp-libplacebo-deband "iterations=1,threshold=4,radius=8,grain_y=1,grain_c=0" -f nut -o - --seek $seek --seekto $seekto | ffmpeg -r "$framerate" -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i - -ss $seek -i $vid -map 0:v:0 -map 1:a? -map 1:s? -map 1:t? -map_chapters 1 -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			nvencc64 --log-level warn -c hevc --avhw -i $vid --output-depth 10 --lossless --audio-copy  --videoformat ntsc --vpp-convolution3d "ythresh=1,cthresh=2,t_ythresh=2,t_cthresh=6" --vpp-libplacebo-deband "iterations=1,threshold=4,radius=8,grain_y=1,grain_c=0" -f nut -o - --seek $seek --seekto $seekto | ffmpeg -r "$framerate" -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i - -ss $seek -i $vid -map 0:v:0 -map 1:a? -map 1:s? -map 1:t? -map_chapters 1 -c:v libx265 -c:a $acodec -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
@@ -482,9 +484,9 @@ function compile-SDR-video {
 	} else {
 
 		if ($vidExt -eq "hevc") {
-			ffmpeg -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			ffmpeg -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i $vid -ss $seek -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a $acodec -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} elseif ($vidExt -eq "mkv") {
-			ffmpeg -ss $seek -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i $vid -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a copy -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
+			ffmpeg -ss $seek -colorspace bt709 -color_range tv -color_primaries bt709 -color_trc bt709 -y -i $vid -to $seekTo -map 0:v:0 -map 0:a? -map 0:s? -c:v libx265 -c:a $acodec -c:s copy -filter:v $filter -preset $preset -tune $tune -pix_fmt yuv420p10le -crf $crf -fps_mode passthrough -async 0 -sws_flags lanczos -movflags +faststart "$vidDir\$vidNameSansExt.OUT.$vidExt"
 		} else {
 			Write-Host "'$vidExt' is not on the list. Choose from 'hevc' or 'mkv'" -ForegroundColor Red ;
 			exit
